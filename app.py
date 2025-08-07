@@ -98,7 +98,13 @@ st.markdown("""
         border: none;
         padding: 0.75rem 2.5rem;
         font-weight: 700;
-        border"""
+        border-radius: 30px;
+        font-family: 'Arial', sans-serif;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 172, 193, 0.4);
+    }"""
 ProCaPPIS - Prostate Cancer Protein-Protein Interaction Prediction System
 Multi-Page Academic Application with Advanced Features
 """
@@ -136,6 +142,7 @@ st.markdown("""
     /* Professional Dark Academic Theme */
     .stApp {
         background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+    }
     }
     
     .main {
