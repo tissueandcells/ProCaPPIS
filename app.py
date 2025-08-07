@@ -148,28 +148,41 @@ st.markdown("""
 
 @st.cache_resource
 def load_all_data():
-    """Loads and caches all necessary data files, handling optional files gracefully."""
+    """Loads and caches all necessary data files, handling missing files gracefully."""
     data = {}
+    st.session_state.data_loaded = True
+    st.session_state.model_loaded = True
+
     # Load essential files first
     try:
         data['sequences'] = json.load(open('focused_gene_to_sequence_map.json', 'r'))
-        data['ppi_pairs'] = pd.read_csv('focused_ppi_pairs.csv')
-        # Load VIP genes with the first column as the index
         data['vip_genes'] = pd.read_csv('vip_gen_listesi.csv', index_col=0)
+    except Exception as e:
+        st.markdown(f'<div class="error-box">Essential data loading error: {e}. The application requires `focused_gene_to_sequence_map.json` and `vip_gen_listesi.csv`.</div>', unsafe_allow_html=True)
+        st.session_state.data_loaded = False
+        return None
+
+    # Load model and scaler files, which are critical for prediction
+    try:
         data['model'] = joblib.load('champion_model.joblib')
         data['scaler'] = joblib.load('champion_scaler.joblib')
-    except Exception as e:
-        st.markdown(f'<div class="error-box">Essential data/model loading error: {e}. Please ensure `.joblib`, `.csv`, and `.json` files are present.</div>', unsafe_allow_html=True)
-        return None  # If essential files are missing, we can't continue
+    except Exception:
+        data['model'] = None
+        data['scaler'] = None
+        st.session_state.model_loaded = False # Set flag if model is missing
 
-    # Load optional ESM embeddings file
+    # Load optional files
+    try:
+        data['ppi_pairs'] = pd.read_csv('focused_ppi_pairs.csv')
+    except FileNotFoundError:
+        data['ppi_pairs'] = pd.DataFrame(columns=['Gene1', 'Gene2', 'Label']) # Create empty dataframe
+
     try:
         data['embeddings'] = h5py.File('focused_esm_embeddings.h5', 'r')
         st.session_state.embeddings_loaded = True
     except (FileNotFoundError, OSError):
         data['embeddings'] = None
         st.session_state.embeddings_loaded = False
-        # No error message here; a warning will be shown on the relevant page.
     
     return data
 
@@ -237,6 +250,11 @@ def home_page():
 def page_ppi_prediction(data):
     st.markdown("<h1>🔬 Protein-Protein Interaction Prediction</h1>", unsafe_allow_html=True)
     
+    # Display a critical error if the model is not loaded
+    if not st.session_state.get('model_loaded', False):
+        st.markdown('<div class="error-box"><b>Critical Error:</b> Model files (`champion_model.joblib`, `champion_scaler.joblib`) not found. Prediction functionality is disabled.</div>', unsafe_allow_html=True)
+        return
+
     # Display a warning if the embeddings file was not loaded
     if not st.session_state.get('embeddings_loaded', False):
         st.markdown('<div class="warning-box"><b>Warning:</b> ESM embeddings file (`focused_esm_embeddings.h5`) not found. Predictions will be based on sequence features only, which may reduce accuracy.</div>', unsafe_allow_html=True)
@@ -318,6 +336,9 @@ def page_network_analysis(data):
     st.markdown('<div class="academic-card">', unsafe_allow_html=True)
     st.markdown("<h3>Network Configuration</h3>", unsafe_allow_html=True)
     
+    if data['ppi_pairs'].empty:
+        st.markdown('<div class="warning-box"><b>Warning:</b> `focused_ppi_pairs.csv` not found. Network analysis is based on a pre-defined list of genes and cannot be built from interaction data.</div>', unsafe_allow_html=True)
+
     vip_genes_list = data['vip_genes'].index.tolist()
     default_selection = vip_genes_list[:15] if len(vip_genes_list) > 15 else vip_genes_list
     
@@ -331,13 +352,17 @@ def page_network_analysis(data):
         if genes_to_analyze:
             with st.spinner("Creating network..."):
                 G = nx.Graph()
-                positive_ppi = data['ppi_pairs'][data['ppi_pairs']['Label'] == 1]
-                relevant_edges = positive_ppi[
-                    (positive_ppi['Gene1'].isin(genes_to_analyze)) & 
-                    (positive_ppi['Gene2'].isin(genes_to_analyze))
-                ]
-                for _, row in relevant_edges.iterrows():
-                    G.add_edge(row['Gene1'], row['Gene2'])
+                # Only build network if the ppi_pairs file exists and is not empty
+                if not data['ppi_pairs'].empty:
+                    positive_ppi = data['ppi_pairs'][data['ppi_pairs']['Label'] == 1]
+                    relevant_edges = positive_ppi[
+                        (positive_ppi['Gene1'].isin(genes_to_analyze)) & 
+                        (positive_ppi['Gene2'].isin(genes_to_analyze))
+                    ]
+                    for _, row in relevant_edges.iterrows():
+                        G.add_edge(row['Gene1'], row['Gene2'])
+                
+                # Add all selected genes as nodes, even if they are isolated
                 for gene in genes_to_analyze:
                     if gene not in G: G.add_node(gene)
                 
@@ -483,8 +508,8 @@ def page_relevance_check(data):
 def main():
     # Load data once and pass it to pages
     data = load_all_data()
-    if data is None:
-        st.markdown('<div class="error-box">Application cannot start without data. Please check file paths and try again.</div>', unsafe_allow_html=True)
+    if not st.session_state.get('data_loaded', False):
+        st.markdown('<div class="error-box">Application cannot start without essential data files. Please check file paths and try again.</div>', unsafe_allow_html=True)
         return
 
     with st.sidebar:
@@ -500,7 +525,6 @@ def main():
             "🔍 Relevance Check": "relevance_check"
         }
         
-        # Use a consistent key for the radio button to maintain state
         if 'page' not in st.session_state:
             st.session_state.page = 'home'
 
@@ -514,27 +538,33 @@ def main():
         
         st.markdown("---")
         st.markdown("## 💻 System Status")
-        st.markdown('<div class="success-box">✅ Models & Data Loaded</div>', unsafe_allow_html=True)
+        if st.session_state.get('model_loaded', False):
+            st.markdown('<div class="success-box" style="padding: 1rem; text-align: center;">✅ Models Loaded</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="error-box" style="padding: 1rem; text-align: center;">❌ Models Not Found</div>', unsafe_allow_html=True)
+
         if not st.session_state.get('embeddings_loaded', False):
-             st.markdown('<div class="warning-box">⚠️ Embeddings Not Found</div>', unsafe_allow_html=True)
+             st.markdown('<div class="warning-box" style="padding: 1rem; text-align: center;">⚠️ Embeddings Not Found</div>', unsafe_allow_html=True)
         
         st.markdown("## 📊 Database Stats")
-        st.metric("Total Genes", len(data['sequences']))
-        st.metric("Total Interactions", len(data['ppi_pairs']))
+        st.metric("Total Genes", len(data.get('sequences', [])))
+        st.metric("Total Interactions", len(data.get('ppi_pairs', [])))
         
         st.markdown("---")
-        st.info("Version: 2.2.0 | Academic Use License")
+        st.info("Version: 2.3.0 | Academic Use License")
 
     # Page routing
-    if st.session_state.page == "home":
+    page_to_display = st.session_state.get('page', 'home')
+
+    if page_to_display == "home":
         home_page()
-    elif st.session_state.page == "prediction":
+    elif page_to_display == "prediction":
         page_ppi_prediction(data)
-    elif st.session_state.page == "network":
+    elif page_to_display == "network":
         page_network_analysis(data)
-    elif st.session_state.page == "go_enrichment":
+    elif page_to_display == "go_enrichment":
         page_go_enrichment(data)
-    elif st.session_state.page == "relevance_check":
+    elif page_to_display == "relevance_check":
         page_relevance_check(data)
 
 if __name__ == "__main__":
