@@ -12,10 +12,11 @@ def load_models_from_drive():
     model = None
     scaler = None
     
-    model_path = "temp_champion_model.joblib"
+    # Model dosya adı
+    model_path = "champion_model.joblib"  # temp_ olmadan
     
     if not os.path.exists(model_path):
-        with st.spinner('Downloading model file from Google Drive...'):
+        with st.spinner('Downloading model from Google Drive...'):
             try:
                 url = f'https://drive.google.com/uc?id={MODEL_FILE_ID}'
                 gdown.download(url, model_path, quiet=False)
@@ -28,19 +29,17 @@ def load_models_from_drive():
         model = joblib.load(model_path)
     except Exception as e:
         st.error(f'Failed to load model: {e}')
-        if os.path.exists(model_path):
-            os.remove(model_path)
         return None, None
     
+    # Scaler'ı yükle
     if os.path.exists('champion_scaler.joblib'):
         try:
             scaler = joblib.load('champion_scaler.joblib')
-            st.success('Scaler loaded successfully')
         except Exception as e:
             st.error(f'Failed to load scaler: {e}')
             return None, None
     else:
-        st.error("champion_scaler.joblib file not found")
+        st.error("champion_scaler.joblib not found")
         return None, None
     
     return model, scaler
