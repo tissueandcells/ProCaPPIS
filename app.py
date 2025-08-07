@@ -26,33 +26,6 @@ st.set_page_config(
 )
 
 # --- DESIGN (CSS) ---
-# Function to embed a local background image
-def get_base64_of_bin_file(bin_file):
-    try:
-        with open(bin_file, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except FileNotFoundError:
-        return None
-
-def set_background(local_img_path):
-    bin_str = get_base64_of_bin_file(local_img_path)
-    if bin_str:
-        img_format = local_img_path.split('.')[-1]
-        page_bg_img = f'''
-            <style>
-            .stApp {{
-                background-image: linear-gradient(rgba(10, 20, 40, 0.8), rgba(10, 20, 40, 0.8)), url("data:image/{img_format};base64,{bin_str}");
-                background-size: cover;
-                background-attachment: fixed;
-            }}
-            </style>
-        '''
-        st.markdown(page_bg_img, unsafe_allow_html=True)
-
-# Try to set a background image, otherwise the gradient will be used.
-# set_background('your_background_image.png')
-
 # Advanced, modern dark theme CSS
 st.markdown("""
     <style>
@@ -175,20 +148,30 @@ st.markdown("""
 
 @st.cache_resource
 def load_all_data():
-    """Loads and caches all necessary data files."""
+    """Loads and caches all necessary data files, handling optional files gracefully."""
     data = {}
+    # Load essential files first
     try:
-        # Load all required files
         data['sequences'] = json.load(open('focused_gene_to_sequence_map.json', 'r'))
-        data['embeddings'] = h5py.File('focused_esm_embeddings.h5', 'r')
         data['ppi_pairs'] = pd.read_csv('focused_ppi_pairs.csv')
-        data['vip_genes'] = pd.read_csv('vip_gen_listesi.csv')
+        # Load VIP genes with the first column as the index
+        data['vip_genes'] = pd.read_csv('vip_gen_listesi.csv', index_col=0)
         data['model'] = joblib.load('champion_model.joblib')
         data['scaler'] = joblib.load('champion_scaler.joblib')
-        return data
     except Exception as e:
-        st.markdown(f'<div class="error-box">Data or model loading error: {e}. Please ensure all required files (`.joblib`, `.csv`, `.json`, `.h5`) are in the same directory as the app.</div>', unsafe_allow_html=True)
-        return None
+        st.markdown(f'<div class="error-box">Essential data/model loading error: {e}. Please ensure `.joblib`, `.csv`, and `.json` files are present.</div>', unsafe_allow_html=True)
+        return None  # If essential files are missing, we can't continue
+
+    # Load optional ESM embeddings file
+    try:
+        data['embeddings'] = h5py.File('focused_esm_embeddings.h5', 'r')
+        st.session_state.embeddings_loaded = True
+    except (FileNotFoundError, OSError):
+        data['embeddings'] = None
+        st.session_state.embeddings_loaded = False
+        # No error message here; a warning will be shown on the relevant page.
+    
+    return data
 
 # --- FEATURE EXTRACTION ---
 AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY'
@@ -216,14 +199,15 @@ def extract_features(seq1, seq2, gene1, gene2, data):
 
     seq_features = np.concatenate([aac1, aac2, dpc1, dpc2])
     
-    # ESM Embeddings
+    # ESM Embeddings (if available)
     emb1, emb2 = np.zeros(1280), np.zeros(1280)
-    if data and gene1 and gene2 and 'embeddings' in data:
+    if data and data.get('embeddings') and gene1 and gene2:
         try:
-            if gene1 in data['embeddings']: emb1 = data['embeddings'][gene1][:]
-            if gene2 in data['embeddings']: emb2 = data['embeddings'][gene2][:]
+            embeddings_file = data['embeddings']
+            if gene1 in embeddings_file: emb1 = embeddings_file[gene1][:]
+            if gene2 in embeddings_file: emb2 = embeddings_file[gene2][:]
         except Exception:
-            pass # Silently fail if embeddings are not found
+            pass # Silently fail on key error
     
     esm_features = np.concatenate([emb1, emb2])
     return np.concatenate([seq_features, esm_features])
@@ -253,6 +237,10 @@ def home_page():
 def page_ppi_prediction(data):
     st.markdown("<h1>🔬 Protein-Protein Interaction Prediction</h1>", unsafe_allow_html=True)
     
+    # Display a warning if the embeddings file was not loaded
+    if not st.session_state.get('embeddings_loaded', False):
+        st.markdown('<div class="warning-box"><b>Warning:</b> ESM embeddings file (`focused_esm_embeddings.h5`) not found. Predictions will be based on sequence features only, which may reduce accuracy.</div>', unsafe_allow_html=True)
+
     st.markdown('<div class="academic-card">', unsafe_allow_html=True)
     st.markdown("<h3>Input Configuration</h3>", unsafe_allow_html=True)
     
@@ -265,7 +253,6 @@ def page_ppi_prediction(data):
     
     seq1_final, seq2_final = "", ""
     gene1, gene2 = "", ""
-    use_embeddings = (input_method == "Database Search")
     
     col1, col2 = st.columns(2)
     
@@ -313,7 +300,7 @@ def page_ppi_prediction(data):
     
     st.markdown('</div>', unsafe_allow_html=True) # Close academic-card
 
-    if 'last_prediction' in st.session_state:
+    if 'last_prediction' in st.session_state and st.session_state.last_prediction:
         res = st.session_state.last_prediction
         st.markdown("---")
         st.markdown("<h2>Prediction Results</h2>", unsafe_allow_html=True)
@@ -513,20 +500,30 @@ def main():
             "🔍 Relevance Check": "relevance_check"
         }
         
-        for page_name, page_key in pages.items():
-            if st.button(page_name, key=f"nav_{page_key}", use_container_width=True):
-                st.session_state.page = page_key
+        # Use a consistent key for the radio button to maintain state
+        if 'page' not in st.session_state:
+            st.session_state.page = 'home'
+
+        selected_page_name = st.radio(
+            "Select a page:", 
+            list(pages.keys()), 
+            key="navigation_radio",
+            label_visibility="collapsed"
+        )
+        st.session_state.page = pages[selected_page_name]
         
         st.markdown("---")
         st.markdown("## 💻 System Status")
         st.markdown('<div class="success-box">✅ Models & Data Loaded</div>', unsafe_allow_html=True)
+        if not st.session_state.get('embeddings_loaded', False):
+             st.markdown('<div class="warning-box">⚠️ Embeddings Not Found</div>', unsafe_allow_html=True)
         
         st.markdown("## 📊 Database Stats")
         st.metric("Total Genes", len(data['sequences']))
         st.metric("Total Interactions", len(data['ppi_pairs']))
         
         st.markdown("---")
-        st.info("Version: 2.1.0 | Academic Use License")
+        st.info("Version: 2.2.0 | Academic Use License")
 
     # Page routing
     if st.session_state.page == "home":
