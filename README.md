@@ -17,7 +17,7 @@ Local Installation
 
 Clone the repository
 
-bashgit clone https://github.com/yourusername/ProCaPPIS.git
+bashgit clone https://github.com/tissueandcells/ProCaPPIS.git
 cd ProCaPPIS
 
 Create a virtual environment
