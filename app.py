@@ -1,4 +1,104 @@
-"""
+# Professional Academic Theme - Dark Mode with Better Visibility
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto+Slab:wght@700&display=swap');
+    
+    /* Professional Dark Academic Theme with Frosted Glass Effect */
+    .stApp {
+        background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #0f172a 100%);
+        background-attachment: fixed;
+        background-size: cover;
+    }
+    
+    .main {
+        padding: 1rem 2rem;
+        background: transparent;
+    }
+    
+    /* Headers - Academic Style with Modern Fonts */
+    h1 {
+        color: #4fc3f7 !important;
+        font-family: 'Roboto Slab', Georgia, serif;
+        font-weight: 700;
+        text-align: center;
+        padding: 20px 0;
+        border-bottom: 3px solid #4fc3f7;
+        margin-bottom: 30px;
+        text-shadow: 0 0 30px rgba(79, 195, 247, 0.5);
+    }
+    
+    h2 {
+        color: #81c784 !important;
+        font-family: 'Roboto Slab', Georgia, serif;
+        font-weight: 600;
+        margin-top: 2rem;
+        text-shadow: 0 0 20px rgba(129, 199, 132, 0.3);
+    }
+    
+    h3 {
+        color: #ffb74d !important;
+        font-family: 'Montserrat', Arial, sans-serif;
+        font-weight: 500;
+    }
+    
+    /* Professional Cards with Glassmorphism */
+    .academic-card {
+        background: rgba(30, 30, 63, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        padding: 2rem;
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(79, 195, 247, 0.2);
+        margin: 1.5rem 0;
+    }
+    
+    .academic-card h3 {
+        color: #4fc3f7 !important;
+        margin-bottom: 1rem;
+    }
+    
+    .academic-card p {
+        color: #e0e0e0 !important;
+        line-height: 1.8;
+        font-family: 'Montserrat', sans-serif;
+    }
+    
+    /* Metrics Cards with Glow */
+    [data-testid="metric-container"] {
+        background: rgba(30, 30, 60, 0.6);
+        backdrop-filter: blur(10px);
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(79, 195, 247, 0.1);
+        border: 1px solid rgba(129, 199, 132, 0.3);
+    }
+    
+    [data-testid="metric-container"] [data-testid="metric-label"] {
+        color: #9e9e9e !important;
+        font-weight: 600;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-family: 'Montserrat', sans-serif;
+    }
+    
+    [data-testid="metric-container"] [data-testid="metric-value"] {
+        color: #4fc3f7 !important;
+        font-weight: 700;
+        font-size: 28px;
+        text-shadow: 0 0 20px rgba(79, 195, 247, 0.5);
+        font-family: 'Roboto Slab', serif;
+    }
+    
+    /* Professional Buttons with Animations */
+    .stButton>button {
+        background: linear-gradient(135deg, #00acc1 0%, #4fc3f7 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 2.5rem;
+        font-weight: 700;
+        border"""
 ProCaPPIS - Prostate Cancer Protein-Protein Interaction Prediction System
 Multi-Page Academic Application with Advanced Features
 """
@@ -356,22 +456,43 @@ if 'current_page' not in st.session_state:
 @st.cache_resource
 def load_models():
     """Load trained models"""
+    model = None
+    scaler = None
+    error_msg = ""
+    
+    # Try loading from Google Drive first
     try:
-        # Try loading from Google Drive first
         from model_loader import load_models_from_drive
         model, scaler = load_models_from_drive()
         if model is not None and scaler is not None:
             return model, scaler
-    except:
-        pass
+        else:
+            error_msg = "Google Drive models returned None"
+    except ImportError as e:
+        error_msg = f"model_loader.py not found: {e}"
+    except Exception as e:
+        error_msg = f"Google Drive loading error: {e}"
     
     # Fallback to local files
     try:
-        model = joblib.load('champion_model.joblib')
-        scaler = joblib.load('champion_scaler.joblib')
-        return model, scaler
-    except:
-        return None, None
+        import os
+        if os.path.exists('champion_model.joblib'):
+            model = joblib.load('champion_model.joblib')
+            if os.path.exists('champion_scaler.joblib'):
+                scaler = joblib.load('champion_scaler.joblib')
+                return model, scaler
+            else:
+                error_msg = "champion_scaler.joblib not found"
+        else:
+            error_msg = "champion_model.joblib not found"
+    except Exception as e:
+        error_msg = f"Local loading error: {e}"
+    
+    # Log the error for debugging
+    if error_msg:
+        st.sidebar.error(f"Model loading issue: {error_msg}")
+    
+    return None, None
 
 @st.cache_data
 def load_gene_data():
@@ -552,10 +673,43 @@ def main():
         
         # System Status
         st.markdown("### 💻 System Status")
-        if model is not None:
+        if model is not None and scaler is not None:
             st.success("✅ Model Loaded")
+            st.caption("SVM model ready for predictions")
         else:
             st.error("❌ Model Not Loaded")
+            
+            # Check what files exist
+            import os
+            files_status = []
+            
+            if os.path.exists('model_loader.py'):
+                files_status.append("✅ model_loader.py")
+            else:
+                files_status.append("❌ model_loader.py")
+            
+            if os.path.exists('champion_model.joblib'):
+                files_status.append("✅ champion_model.joblib")
+            else:
+                files_status.append("❌ champion_model.joblib")
+            
+            if os.path.exists('champion_scaler.joblib'):
+                files_status.append("✅ champion_scaler.joblib")
+            else:
+                files_status.append("❌ champion_scaler.joblib")
+            
+            if os.path.exists('temp_champion_model.joblib'):
+                files_status.append("✅ temp_model (from Drive)")
+            
+            with st.expander("🔍 Debug Info"):
+                st.write("Files status:")
+                for status in files_status:
+                    st.write(status)
+                
+                st.write("\nTry:")
+                st.write("1. Check if model files are in GitHub")
+                st.write("2. Ensure model_loader.py exists")
+                st.write("3. Check Google Drive permissions")
         
         # Database Stats
         if not vip_genes_df.empty:
