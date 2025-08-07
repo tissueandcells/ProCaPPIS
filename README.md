@@ -59,12 +59,14 @@ Selection criteria: |Log2FC| ≥ 1.0, FDR < 0.05
 
 🤖 Model Performance
 MetricValueAccuracy79.85%Precision79.9%Recall79.9%F1-Score0.798ROC-AUC0.872
-📁 Project Structure
+
+
+
+Project Structure
 ProCaPPIS/
 ├── app.py                              # Main Streamlit application
 ├── requirements.txt                    # Python dependencies
 ├── README.md                          # Project documentation
-├── LICENSE                            # MIT License
 ├── .gitignore                         # Git ignore file
 ├── data/
 │   ├── vip_gen_listesi.csv          # VIP gene list
@@ -115,16 +117,6 @@ Commit your changes (git commit -m 'Add some AmazingFeature')
 Push to the branch (git push origin feature/AmazingFeature)
 Open a Pull Request
 
-
-
-
-
-🙏 Acknowledgments
-
-TCGA Research Network for providing genomic data
-STRING database team for protein interaction resources
-Meta AI for ESM-2 protein language model
-Streamlit team for the web framework
 
 📊 Performance Benchmarks
 ModelAccuracyF1-ScoreTraining TimeSVM79.85%0.7983.53 hoursRandom Forest79.03%0.79039.28 secXGBoost78.31%0.7835.14 minLogistic Regression74.73%0.7474.67 min
