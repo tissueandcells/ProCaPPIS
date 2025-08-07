@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+ppi_env/
+
+# Data files
+*.h5
+*.hdf5
+*.joblib
+*.pkl
+*.gz
+*.zip
+
+# Large files
+focused_esm_embeddings.h5
+champion_model.joblib
+champion_scaler.joblib
+prad_tcga_pan_can_atlas_2018/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Output
+*.png
+*.pdf
+*.html
+results/
+output/
+
+# Keep these
+!requirements.txt
+!README.md
+!app.py
+!vip_gen_listesi.csv
+!focused_ppi_pairs.csv
+!focused_gene_to_sequence_map.json
