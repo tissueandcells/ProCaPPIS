@@ -5,4 +5,5 @@ plotly
 networkx
 scikit-learn
 joblib
-openpyxl  # Excel export için
+openpyxl
+
