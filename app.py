@@ -152,16 +152,18 @@ def load_models():
     # 1. Google Drive'dan yüklemeyi önce dene (model_loader.py varsa)
     try:
         from model_loader import load_models_from_drive
+        st.info("🔄 Attempting to load models from Google Drive...")
         model, scaler = load_models_from_drive()
         if model is not None and scaler is not None:
             status = "loaded_from_drive"
+            st.success("✅ Models successfully loaded from Google Drive!")
             return model, scaler, status
         else:
-            st.warning("Google Drive'dan model yüklenemedi")
+            st.warning("⚠️ Google Drive model loading returned None")
     except ImportError:
-        st.warning("model_loader.py dosyası bulunamadı")
+        st.warning("⚠️ model_loader.py dosyası bulunamadı")
     except Exception as e:
-        st.warning(f"Google Drive yükleme hatası: {e}")
+        st.error(f"❌ Google Drive yükleme hatası: {e}")
     
     # 2. GitHub'daki dosyaları kontrol et (farklı isim varyantları)
     model_files = [
@@ -427,22 +429,53 @@ def main():
         
         # System Status
         st.markdown("### 💻 System Status")
-        if status == "loaded_from_files":
-            st.success("✅ Model Loaded (Local)")
-        elif status == "loaded_from_drive":
-            st.success("✅ Model Loaded (Drive)")
+        if status == "loaded_from_drive":
+            st.success("✅ Model Loaded (Google Drive)")
+        elif status == "loaded_from_files":
+            st.success("✅ Model Loaded (Local Files)")
         else:
             st.error("❌ Model Not Available")
-            st.caption("Lütfen champion_model.joblib ve champion_scaler.joblib dosyalarını yükleyin")
+            
+            # Debug bilgileri göster
+            with st.expander("🔧 Troubleshooting"):
+                st.write("**Çözüm önerileri:**")
+                st.write("1. model_loader.py dosyasının mevcut olduğundan emin olun")
+                st.write("2. Google Drive bağlantısını kontrol edin")
+                st.write("3. Model dosya adlarını kontrol edin")
+                
+                # Dosya durumunu göster
+                st.write("\n**Dosya Durumu:**")
+                files_to_check = [
+                    'model_loader.py',
+                    'champion_model.joblib', 
+                    'champion_scaler.joblib',
+                    'best_model.joblib',
+                    'best_scaler.joblib'
+                ]
+                
+                for file in files_to_check:
+                    if os.path.exists(file):
+                        st.write(f"✅ {file}")
+                    else:
+                        st.write(f"❌ {file}")
         
+        # Data Status
+        st.markdown("### 📂 Data Status")  
+        if gene_sequences and not vip_genes_df.empty:
+            st.success("✅ Data Loaded")
+        else:
+            st.warning("⚠️ Data Issues")
+            
         # Database Stats
-        if not vip_genes_df.empty and gene_sequences:
+        if gene_sequences and not vip_genes_df.empty:
             st.markdown("### 📊 Database Stats")
             st.metric("Total Genes", len(gene_sequences))
             st.metric("VIP Genes", len(vip_genes_df))
             if not ppi_df.empty:
                 positive_ppis = len(ppi_df[ppi_df.get('Label', 0) == 1])
                 st.metric("Known PPIs", positive_ppis)
+            else:
+                st.metric("Known PPIs", "Loading...")
         
         st.markdown("---")
         st.markdown("### 📚 Data Sources")
