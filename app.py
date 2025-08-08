@@ -360,16 +360,26 @@ def create_network_visualization(predictions_df):
     G = nx.Graph()
     
     # Add edges for positive predictions
-    for _, row in predictions_df.iterrows():
-        if row.get('Prediction', '') == 'Interaction' or row.get('Prediction_Binary', 0) == 1:
-            G.add_edge(row['Protein1'], row['Protein2'], 
-                      weight=row.get('Confidence', 50))
+    interactions_df = predictions_df[
+        (predictions_df.get('Prediction', '') == 'Interaction') | 
+        (predictions_df.get('Prediction_Binary', 0) == 1)
+    ]
+    
+    if interactions_df.empty:
+        return None
+    
+    for _, row in interactions_df.iterrows():
+        weight = row.get('Confidence', 50)
+        G.add_edge(row['Protein1'], row['Protein2'], weight=weight)
     
     if len(G.nodes()) == 0:
         return None
     
     # Layout
-    pos = nx.spring_layout(G, k=1/np.sqrt(len(G.nodes())), iterations=50)
+    try:
+        pos = nx.spring_layout(G, k=1/np.sqrt(len(G.nodes())), iterations=50)
+    except:
+        pos = nx.spring_layout(G)
     
     # Create edge traces
     edge_traces = []
@@ -382,8 +392,9 @@ def create_network_visualization(predictions_df):
             x=[x0, x1, None],
             y=[y0, y1, None],
             mode='lines',
-            line=dict(width=weight/30, color='#888'),
-            hoverinfo='none'
+            line=dict(width=max(1, weight/30), color='rgba(136,136,136,0.5)'),
+            hoverinfo='none',
+            showlegend=False
         )
         edge_traces.append(edge_trace)
     
@@ -391,52 +402,84 @@ def create_network_visualization(predictions_df):
     node_x = []
     node_y = []
     node_text = []
+    node_info = []
     node_size = []
+    node_color = []
     
     for node in G.nodes():
         x, y = pos[node]
         node_x.append(x)
         node_y.append(y)
         degree = G.degree(node)
-        node_text.append(f"{node}<br>Connections: {degree}")
-        node_size.append(20 + degree * 5)
+        node_text.append(node)
+        node_info.append(f"{node}<br>Connections: {degree}")
+        node_size.append(max(10, 15 + degree * 3))
+        node_color.append(degree)
     
+    # Create node trace with simplified marker
     node_trace = go.Scatter(
         x=node_x,
         y=node_y,
         mode='markers+text',
-        text=[node for node in G.nodes()],
+        text=node_text,
         textposition="top center",
+        textfont=dict(size=10, color='white'),
         hoverinfo='text',
-        hovertext=node_text,
+        hovertext=node_info,
         marker=dict(
             size=node_size,
-            color=node_size,
+            color=node_color,
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(
+                title="Degree",
+                titleside="right",
                 thickness=15,
-                title='Degree',
-                xanchor='left',
-                titleside='right'
+                len=0.7
             ),
-            line=dict(width=2, color='white')
-        )
+            line=dict(width=1, color='white'),
+            opacity=0.8
+        ),
+        showlegend=False
     )
     
     # Create figure
     fig = go.Figure(data=edge_traces + [node_trace])
     fig.update_layout(
-        title='<b>Protein-Protein Interaction Network</b>',
-        titlefont_size=16,
+        title=dict(
+            text='<b>Protein-Protein Interaction Network</b>',
+            x=0.5,
+            font=dict(size=18, color='white')
+        ),
         showlegend=False,
         hovermode='closest',
-        margin=dict(b=20,l=5,r=5,t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        margin=dict(b=20, l=5, r=5, t=50),
+        annotations=[
+            dict(
+                text=f"Network: {len(G.nodes())} proteins, {len(G.edges())} interactions",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.005, y=-0.002,
+                xanchor='left', yanchor='bottom',
+                font=dict(color='white', size=12)
+            )
+        ],
+        xaxis=dict(
+            showgrid=False, 
+            zeroline=False, 
+            showticklabels=False,
+            showline=False
+        ),
+        yaxis=dict(
+            showgrid=False, 
+            zeroline=False, 
+            showticklabels=False,
+            showline=False
+        ),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        height=600
+        height=600,
+        font=dict(color='white')
     )
     
     return fig
@@ -792,6 +835,17 @@ def main():
                         try:
                             # Feature extraction
                             features = extract_features(protein1_name, protein2_name, gene_sequences)
+                            
+                            # Debug: Feature boyutunu kontrol et
+                            st.write(f"🔍 Generated {features.shape[0]} features")
+                            expected_features = scaler.n_features_in_ if hasattr(scaler, 'n_features_in_') else "Unknown"
+                            st.write(f"🔍 Scaler expects {expected_features} features")
+                            
+                            # Scaler'a uygun boyutta olup olmadığını kontrol et
+                            if hasattr(scaler, 'n_features_in_') and features.shape[0] != scaler.n_features_in_:
+                                st.error(f"❌ Feature dimension mismatch: Generated {features.shape[0]}, Expected {scaler.n_features_in_}")
+                                st.stop()
+                            
                             features_scaled = scaler.transform(features.reshape(1, -1))
                             
                             # Prediction
@@ -1076,11 +1130,26 @@ def main():
             st.markdown("### 🔗 Interaction Network")
             
             if interactions > 0:
-                fig = create_network_visualization(predictions_df)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No interactions to visualize")
+                try:
+                    fig = create_network_visualization(predictions_df)
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No interactions to visualize")
+                except Exception as e:
+                    st.error(f"Network visualization error: {str(e)}")
+                    st.info("Showing alternative network summary instead:")
+                    
+                    # Alternative: Simple network statistics
+                    interaction_pairs = predictions_df[predictions_df['Prediction'] == 'Interaction']
+                    if not interaction_pairs.empty:
+                        st.write("**Predicted Interactions:**")
+                        for _, row in interaction_pairs.head(10).iterrows():
+                            conf = row.get('Confidence', 0)
+                            st.write(f"• {row['Protein1']} ↔ {row['Protein2']} (Confidence: {conf:.1f}%)")
+                        
+                        if len(interaction_pairs) > 10:
+                            st.write(f"... and {len(interaction_pairs) - 10} more interactions")
                 
                 # Network Metrics
                 st.markdown("### 📊 Network Metrics")
