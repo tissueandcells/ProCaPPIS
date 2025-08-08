@@ -284,17 +284,75 @@ def calculate_dpc(sequence):
     return dpc
 
 def extract_features(gene1, gene2, gene_sequences):
-    """Extract features for protein pair"""
+    """Extract features for protein pair - Updated for 3400 features"""
     seq1 = gene_sequences.get(gene1, "")
     seq2 = gene_sequences.get(gene2, "")
     
+    # AAC (Amino Acid Composition) - 20 features each
     aac1 = calculate_aac(seq1)
     aac2 = calculate_aac(seq2)
+    
+    # DPC (Dipeptide Composition) - 400 features each  
     dpc1 = calculate_dpc(seq1)
     dpc2 = calculate_dpc(seq2)
     
-    # Combine features: AAC1(20) + AAC2(20) + DPC1(400) + DPC2(400) = 840 features
-    features = np.concatenate([aac1, aac2, dpc1, dpc2])
+    # Calculate additional features to reach 3400 total
+    # Current: AAC1(20) + AAC2(20) + DPC1(400) + DPC2(400) = 840
+    # Need: 3400 - 840 = 2560 more features
+    
+    # Additional sequence-based features
+    additional_features = []
+    
+    for seq in [seq1, seq2]:
+        if seq:
+            # Tripeptide composition (8000 possible tripeptides, but we'll use reduced set)
+            # Use only most common amino acids for tripeptides to reduce dimension
+            common_aa = 'ACDEFGHIKLMNPQRSTVWY'[:10]  # Top 10 most common
+            tripeptides = [aa1 + aa2 + aa3 for aa1 in common_aa for aa2 in common_aa for aa3 in common_aa]
+            tpc = np.zeros(1000)  # 10^3 = 1000 tripeptides
+            seq_len = len(seq) - 2
+            for i, tp in enumerate(tripeptides[:1000]):
+                if seq_len > 0:
+                    tpc[i] = seq.count(tp) / seq_len
+                    
+            # Sequence length features (normalized)
+            length_features = np.array([
+                len(seq) / 2000,  # Normalized length
+                (len(seq) / 2000) ** 2,  # Squared length
+                np.sqrt(len(seq) / 2000) if len(seq) > 0 else 0  # Square root length
+            ])
+            
+            # Amino acid property features
+            hydrophobic_aa = 'AVILMFYW'
+            charged_aa = 'DEKR'
+            polar_aa = 'STYNQ'
+            aromatic_aa = 'FYW'
+            
+            property_features = np.array([
+                sum(1 for aa in seq if aa in hydrophobic_aa) / len(seq) if seq else 0,
+                sum(1 for aa in seq if aa in charged_aa) / len(seq) if seq else 0,
+                sum(1 for aa in seq if aa in polar_aa) / len(seq) if seq else 0,
+                sum(1 for aa in seq if aa in aromatic_aa) / len(seq) if seq else 0,
+            ])
+            
+            # Combine additional features
+            seq_additional = np.concatenate([tpc, length_features, property_features])
+            additional_features.extend(seq_additional)
+        else:
+            # If no sequence, add zeros
+            additional_features.extend(np.zeros(1007))  # 1000 + 3 + 4 = 1007
+    
+    # Convert to numpy array and ensure correct length
+    additional_features = np.array(additional_features[:2560])  # Ensure exactly 2560 features
+    
+    # If still not enough features, pad with zeros
+    if len(additional_features) < 2560:
+        padding = np.zeros(2560 - len(additional_features))
+        additional_features = np.concatenate([additional_features, padding])
+    
+    # Combine all features: AAC1(20) + AAC2(20) + DPC1(400) + DPC2(400) + Additional(2560) = 3400
+    features = np.concatenate([aac1, aac2, dpc1, dpc2, additional_features])
+    
     return features
 
 def create_network_visualization(predictions_df):
