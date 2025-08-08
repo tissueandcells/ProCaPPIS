@@ -88,9 +88,9 @@ def load_models_from_drive():
     
     # 4. Model ve scaler uyumluluğunu kontrol et
     try:
-        # Test features (840 dimensional - AAC(40) + DPC(800))
+        # Test features (3400 dimensional - correct feature count)
         import numpy as np
-        test_features = np.random.randn(1, 840)
+        test_features = np.random.randn(1, 3400)
         
         # Scaler test
         scaled_features = scaler.transform(test_features)
