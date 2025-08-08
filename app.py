@@ -416,7 +416,7 @@ def create_network_visualization(predictions_df):
         node_size.append(max(10, 15 + degree * 3))
         node_color.append(degree)
     
-    # Create node trace with simplified marker
+    # Create node trace with corrected colorbar
     node_trace = go.Scatter(
         x=node_x,
         y=node_y,
@@ -432,10 +432,14 @@ def create_network_visualization(predictions_df):
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(
-                title="Degree",
-                titleside="right",
+                title=dict(
+                    text="Degree",
+                    side="right"
+                ),
                 thickness=15,
-                len=0.7
+                len=0.7,
+                x=1.02,
+                xanchor="left"
             ),
             line=dict(width=1, color='white'),
             opacity=0.8
@@ -448,6 +452,122 @@ def create_network_visualization(predictions_df):
     fig.update_layout(
         title=dict(
             text='<b>Protein-Protein Interaction Network</b>',
+            x=0.5,
+            font=dict(size=18, color='white')
+        ),
+        showlegend=False,
+        hovermode='closest',
+        margin=dict(b=20, l=5, r=5, t=50),
+        annotations=[
+            dict(
+                text=f"Network: {len(G.nodes())} proteins, {len(G.edges())} interactions",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.005, y=-0.002,
+                xanchor='left', yanchor='bottom',
+                font=dict(color='white', size=12)
+            )
+        ],
+        xaxis=dict(
+            showgrid=False, 
+            zeroline=False, 
+            showticklabels=False,
+            showline=False
+        ),
+        yaxis=dict(
+            showgrid=False, 
+            zeroline=False, 
+            showticklabels=False,
+            showline=False
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=600,
+        font=dict(color='white')
+    )
+    
+    return fig
+
+def create_simple_network(predictions_df):
+    """Create simple network graph without complex colorbar"""
+    G = nx.Graph()
+    
+    # Add edges for positive predictions
+    interactions_df = predictions_df[
+        (predictions_df.get('Prediction', '') == 'Interaction') | 
+        (predictions_df.get('Prediction_Binary', 0) == 1)
+    ]
+    
+    if interactions_df.empty:
+        return None
+    
+    for _, row in interactions_df.iterrows():
+        weight = row.get('Confidence', 50)
+        G.add_edge(row['Protein1'], row['Protein2'], weight=weight)
+    
+    if len(G.nodes()) == 0:
+        return None
+    
+    # Layout
+    try:
+        pos = nx.spring_layout(G, k=1/np.sqrt(len(G.nodes())), iterations=50)
+    except:
+        pos = nx.spring_layout(G)
+    
+    # Create edge traces
+    edge_traces = []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        
+        edge_trace = go.Scatter(
+            x=[x0, x1, None],
+            y=[y0, y1, None],
+            mode='lines',
+            line=dict(width=2, color='rgba(136,136,136,0.5)'),
+            hoverinfo='none',
+            showlegend=False
+        )
+        edge_traces.append(edge_trace)
+    
+    # Create node trace (simple version)
+    node_x = []
+    node_y = []
+    node_text = []
+    node_info = []
+    
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        degree = G.degree(node)
+        node_text.append(node)
+        node_info.append(f"{node}<br>Connections: {degree}")
+    
+    # Simple node trace without colorbar
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode='markers+text',
+        text=node_text,
+        textposition="top center",
+        textfont=dict(size=10, color='white'),
+        hoverinfo='text',
+        hovertext=node_info,
+        marker=dict(
+            size=20,
+            color='lightblue',
+            line=dict(width=2, color='white'),
+            opacity=0.8
+        ),
+        showlegend=False
+    )
+    
+    # Create figure
+    fig = go.Figure(data=edge_traces + [node_trace])
+    fig.update_layout(
+        title=dict(
+            text='<b>Protein-Protein Interaction Network (Simplified)</b>',
             x=0.5,
             font=dict(size=18, color='white')
         ),
@@ -1138,18 +1258,28 @@ def main():
                         st.info("No interactions to visualize")
                 except Exception as e:
                     st.error(f"Network visualization error: {str(e)}")
-                    st.info("Showing alternative network summary instead:")
                     
-                    # Alternative: Simple network statistics
-                    interaction_pairs = predictions_df[predictions_df['Prediction'] == 'Interaction']
-                    if not interaction_pairs.empty:
-                        st.write("**Predicted Interactions:**")
-                        for _, row in interaction_pairs.head(10).iterrows():
-                            conf = row.get('Confidence', 0)
-                            st.write(f"• {row['Protein1']} ↔ {row['Protein2']} (Confidence: {conf:.1f}%)")
+                    # Try simplified network without colorbar
+                    try:
+                        st.info("Trying simplified network visualization...")
+                        fig_simple = create_simple_network(predictions_df)
+                        if fig_simple:
+                            st.plotly_chart(fig_simple, use_container_width=True)
+                        else:
+                            st.info("Could not create network visualization")
+                    except:
+                        st.info("Showing alternative network summary instead:")
                         
-                        if len(interaction_pairs) > 10:
-                            st.write(f"... and {len(interaction_pairs) - 10} more interactions")
+                        # Alternative: Simple network statistics
+                        interaction_pairs = predictions_df[predictions_df['Prediction'] == 'Interaction']
+                        if not interaction_pairs.empty:
+                            st.write("**Predicted Interactions:**")
+                            for _, row in interaction_pairs.head(10).iterrows():
+                                conf = row.get('Confidence', 0)
+                                st.write(f"• {row['Protein1']} ↔ {row['Protein2']} (Confidence: {conf:.1f}%)")
+                            
+                            if len(interaction_pairs) > 10:
+                                st.write(f"... and {len(interaction_pairs) - 10} more interactions")
                 
                 # Network Metrics
                 st.markdown("### 📊 Network Metrics")
