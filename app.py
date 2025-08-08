@@ -144,34 +144,82 @@ if 'model_status' not in st.session_state:
 
 @st.cache_resource
 def load_models():
-    """Load trained models from GitHub files"""
+    """Load trained models with multiple fallback options"""
     model = None
     scaler = None
     status = "not_found"
     
-    # 1. GitHub'daki gerçek model dosyalarını yükle
-    try:
-        if os.path.exists('champion_model.joblib') and os.path.exists('champion_scaler.joblib'):
-            model = joblib.load('champion_model.joblib')
-            scaler = joblib.load('champion_scaler.joblib')
-            status = "loaded_from_files"
-            return model, scaler, status
-        else:
-            st.error("❌ Model dosyaları bulunamadı: champion_model.joblib ve champion_scaler.joblib gerekli")
-    except Exception as e:
-        st.error(f"Model yükleme hatası: {e}")
-    
-    # 2. Google Drive'dan yüklemeyi dene (model_loader.py varsa)
+    # 1. Google Drive'dan yüklemeyi önce dene (model_loader.py varsa)
     try:
         from model_loader import load_models_from_drive
         model, scaler = load_models_from_drive()
         if model is not None and scaler is not None:
             status = "loaded_from_drive"
             return model, scaler, status
+        else:
+            st.warning("Google Drive'dan model yüklenemedi")
     except ImportError:
-        pass
+        st.warning("model_loader.py dosyası bulunamadı")
     except Exception as e:
-        st.warning(f"Google Drive'dan yükleme hatası: {e}")
+        st.warning(f"Google Drive yükleme hatası: {e}")
+    
+    # 2. GitHub'daki dosyaları kontrol et (farklı isim varyantları)
+    model_files = [
+        'champion_model.joblib',
+        'best_model.joblib', 
+        'svm_model.joblib',
+        'model.joblib'
+    ]
+    
+    scaler_files = [
+        'champion_scaler.joblib',
+        'best_scaler.joblib',
+        'scaler.joblib',
+        'standard_scaler.joblib'
+    ]
+    
+    model_file_found = None
+    scaler_file_found = None
+    
+    # Model dosyasını bul
+    for model_file in model_files:
+        if os.path.exists(model_file):
+            model_file_found = model_file
+            break
+    
+    # Scaler dosyasını bul  
+    for scaler_file in scaler_files:
+        if os.path.exists(scaler_file):
+            scaler_file_found = scaler_file
+            break
+    
+    if model_file_found and scaler_file_found:
+        try:
+            model = joblib.load(model_file_found)
+            scaler = joblib.load(scaler_file_found)
+            status = "loaded_from_files"
+            st.success(f"✅ Model yüklendi: {model_file_found}, {scaler_file_found}")
+            return model, scaler, status
+        except Exception as e:
+            st.error(f"Model yükleme hatası: {e}")
+    
+    # 3. Mevcut dosyaları listele
+    st.error("❌ Model dosyaları bulunamadı!")
+    
+    # Mevcut .joblib dosyalarını göster
+    joblib_files = [f for f in os.listdir('.') if f.endswith('.joblib')]
+    if joblib_files:
+        st.info(f"Bulunan .joblib dosyaları: {', '.join(joblib_files)}")
+        st.info("Dosya adlarını kontrol edin ve model_loader.py'yi kullanmayı deneyin")
+    else:
+        st.info("Hiç .joblib dosyası bulunamadı")
+        
+    # 4. Tüm dosyaları listele (debug için)
+    with st.expander("🔍 Debug: Tüm dosyalar"):
+        all_files = os.listdir('.')
+        st.write("Mevcut dosyalar:")
+        for f in sorted(all_files):
+            st.write(f"- {f}")
     
     return model, scaler, status
 
