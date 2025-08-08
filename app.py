@@ -1,3 +1,35 @@
+"""
+ProCaPPIS - Prostate Cancer Protein-Protein Interaction Prediction System
+Multi-Page Academic Application with Advanced Features
+"""
+
+import streamlit as st
+
+# Page configuration MUST be first
+st.set_page_config(
+    page_title="ProCaPPIS - Advanced PPI Analysis Platform",
+    page_icon="🧬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/yourusername/procappis',
+        'Report a bug': "https://github.com/yourusername/procappis/issues",
+        'About': "ProCaPPIS v2.0 - Academic PPI Prediction Platform"
+    }
+)
+
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
+import networkx as nx
+import json
+import joblib
+from datetime import datetime
+import warnings
+import os
+warnings.filterwarnings('ignore')
+
 # Professional Academic Theme - Dark Mode with Better Visibility
 st.markdown("""
     <style>
@@ -91,143 +123,13 @@ st.markdown("""
         font-family: 'Roboto Slab', serif;
     }
     
-    /* Professional Buttons with Animations */
-    .stButton>button {
-        background: linear-gradient(135deg, #00acc1 0%, #4fc3f7 100%);
-        color: white;
-        border: none;
-        padding: 0.75rem 2.5rem;
-        font-weight: 700;
-        border-radius: 30px;
-        font-family: 'Arial', sans-serif;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 20px rgba(0, 172, 193, 0.4);
-    }"""
-ProCaPPIS - Prostate Cancer Protein-Protein Interaction Prediction System
-Multi-Page Academic Application with Advanced Features
-"""
-
-import streamlit as st
-
-# Page configuration MUST be first
-st.set_page_config(
-    page_title="ProCaPPIS - Advanced PPI Analysis Platform",
-    page_icon="🧬",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://github.com/yourusername/procappis',
-        'Report a bug': "https://github.com/yourusername/procappis/issues",
-        'About': "ProCaPPIS v2.0 - Academic PPI Prediction Platform"
-    }
-)
-
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-import networkx as nx
-import json
-import joblib
-from datetime import datetime
-import warnings
-import os
-warnings.filterwarnings('ignore')
-
-# Professional Academic Theme - Dark Mode with Better Visibility
-st.markdown("""
-    <style>
-    /* Professional Dark Academic Theme */
-    .stApp {
-        background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
-    }
-    }
-    
-    .main {
-        padding: 1rem 2rem;
-        background: transparent;
-    }
-    
-    /* Headers - Academic Style */
-    h1 {
-        color: #4fc3f7 !important;
-        font-family: 'Georgia', serif;
-        font-weight: 700;
-        text-align: center;
-        padding: 20px 0;
-        border-bottom: 2px solid #4fc3f7;
-        margin-bottom: 30px;
-        text-shadow: 0 0 20px rgba(79, 195, 247, 0.5);
-    }
-    
-    h2 {
-        color: #81c784 !important;
-        font-family: 'Georgia', serif;
-        font-weight: 600;
-        margin-top: 2rem;
-        text-shadow: 0 0 10px rgba(129, 199, 132, 0.3);
-    }
-    
-    h3 {
-        color: #ffb74d !important;
-        font-family: 'Arial', sans-serif;
-        font-weight: 500;
-    }
-    
-    /* Professional Cards */
-    .academic-card {
-        background: linear-gradient(145deg, #1e1e3f, #252550);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(79, 195, 247, 0.3);
-        margin: 1.5rem 0;
-        backdrop-filter: blur(10px);
-    }
-    
-    .academic-card h3 {
-        color: #4fc3f7 !important;
-        margin-bottom: 1rem;
-    }
-    
-    .academic-card p {
-        color: #e0e0e0 !important;
-        line-height: 1.8;
-    }
-    
-    /* Metrics Cards */
-    [data-testid="metric-container"] {
-        background: linear-gradient(145deg, #1a1a3e, #2d2d5e);
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(129, 199, 132, 0.3);
-    }
-    
-    [data-testid="metric-container"] [data-testid="metric-label"] {
-        color: #9e9e9e !important;
-        font-weight: 600;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    [data-testid="metric-container"] [data-testid="metric-value"] {
-        color: #4fc3f7 !important;
-        font-weight: 700;
-        font-size: 28px;
-        text-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
-    }
-    
     [data-testid="metric-container"] [data-testid="metric-delta"] {
         color: #81c784 !important;
     }
     
-    /* Professional Buttons */
+    /* Professional Buttons with Animations */
     .stButton>button {
-        background: linear-gradient(90deg, #00acc1 0%, #26c6da 100%);
+        background: linear-gradient(135deg, #00acc1 0%, #4fc3f7 100%);
         color: white;
         border: none;
         padding: 0.75rem 2.5rem;
@@ -243,7 +145,7 @@ st.markdown("""
     .stButton>button:hover {
         transform: translateY(-3px);
         box-shadow: 0 8px 30px rgba(0, 172, 193, 0.6);
-        background: linear-gradient(90deg, #26c6da 0%, #00acc1 100%);
+        background: linear-gradient(135deg, #26c6da 0%, #00acc1 100%);
     }
     
     /* Sidebar */
@@ -1433,7 +1335,7 @@ def main():
             with col3:
                 if st.button("🗑️ Clear All Results"):
                     st.session_state.predictions = []
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.info("No results available. Please make predictions first.")
 
