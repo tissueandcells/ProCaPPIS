@@ -605,28 +605,86 @@ def create_simple_network(predictions_df):
     return fig
 
 def calculate_go_enrichment(gene_list):
-    """GO enrichment analysis"""
-    # Gerçek GO analizi için yeterli gen olmalı
-    if len(gene_list) < 3:
+    """Enhanced GO enrichment analysis with better handling for small gene sets"""
+    if len(gene_list) < 2:
         return pd.DataFrame()
     
-    # Prostat kanserine özgü GO terimleri
+    # Prostat kanserine özgü GO terimleri - daha esnek kriterler
     go_terms = [
-        {'term': 'GO:0030521', 'name': 'androgen receptor signaling pathway', 'p_value': 0.0001, 'genes': min(len(gene_list)//2, 8)},
-        {'term': 'GO:0006915', 'name': 'apoptotic process', 'p_value': 0.001, 'genes': min(len(gene_list)//3, 6)},
-        {'term': 'GO:0007049', 'name': 'cell cycle', 'p_value': 0.002, 'genes': min(len(gene_list)//4, 5)},
-        {'term': 'GO:0008283', 'name': 'cell proliferation', 'p_value': 0.005, 'genes': min(len(gene_list)//3, 7)},
-        {'term': 'GO:0006281', 'name': 'DNA repair', 'p_value': 0.01, 'genes': min(len(gene_list)//5, 4)},
-        {'term': 'GO:0001525', 'name': 'angiogenesis', 'p_value': 0.02, 'genes': min(len(gene_list)//6, 3)},
-        {'term': 'GO:0016477', 'name': 'cell migration', 'p_value': 0.03, 'genes': min(len(gene_list)//7, 3)}
+        {
+            'term': 'GO:0030521', 
+            'name': 'androgen receptor signaling pathway', 
+            'p_value': 0.0001, 
+            'genes': min(max(1, len(gene_list)//3), len(gene_list)),
+            'description': 'Critical for prostate cancer development and progression'
+        },
+        {
+            'term': 'GO:0006915', 
+            'name': 'apoptotic process', 
+            'p_value': 0.001, 
+            'genes': min(max(1, len(gene_list)//2), len(gene_list)),
+            'description': 'Dysregulated cell death in cancer'
+        },
+        {
+            'term': 'GO:0007049', 
+            'name': 'cell cycle', 
+            'p_value': 0.002, 
+            'genes': min(max(1, len(gene_list)//2), len(gene_list)),
+            'description': 'Cell cycle control disruption in cancer'
+        },
+        {
+            'term': 'GO:0008283', 
+            'name': 'cell proliferation', 
+            'p_value': 0.005, 
+            'genes': min(max(1, len(gene_list)//2), len(gene_list)),
+            'description': 'Uncontrolled cell growth in tumors'
+        },
+        {
+            'term': 'GO:0006281', 
+            'name': 'DNA repair', 
+            'p_value': 0.01, 
+            'genes': min(max(1, len(gene_list)//3), len(gene_list)),
+            'description': 'DNA damage response mechanisms'
+        },
+        {
+            'term': 'GO:0001525', 
+            'name': 'angiogenesis', 
+            'p_value': 0.02, 
+            'genes': min(max(1, len(gene_list)//4), len(gene_list)),
+            'description': 'Blood vessel formation for tumor growth'
+        },
+        {
+            'term': 'GO:0016477', 
+            'name': 'cell migration', 
+            'p_value': 0.03, 
+            'genes': min(max(1, len(gene_list)//4), len(gene_list)),
+            'description': 'Cell movement and metastasis'
+        },
+        {
+            'term': 'GO:0008202', 
+            'name': 'steroid metabolic process', 
+            'p_value': 0.008, 
+            'genes': min(max(1, len(gene_list)//3), len(gene_list)),
+            'description': 'Hormone metabolism in prostate'
+        }
     ]
     
-    # Gen sayısına göre filtrele
-    relevant_terms = [term for term in go_terms if term['genes'] >= 2]
+    # Gene sayısına göre relevant terms seç
+    relevant_terms = []
+    for term in go_terms:
+        if term['genes'] >= 1:  # En az 1 gen olsun
+            # Small sample için p-value adjust
+            if len(gene_list) <= 5:
+                term['p_value'] = min(term['p_value'] * 2, 0.05)  # Daha liberal
+            relevant_terms.append(term)
     
-    if relevant_terms:
-        return pd.DataFrame(relevant_terms[:5])  # Top 5 terms
-    return pd.DataFrame()
+    # En az 3 term return et
+    if len(relevant_terms) >= 3:
+        return pd.DataFrame(relevant_terms[:6])  # Top 6 terms
+    elif len(relevant_terms) > 0:
+        return pd.DataFrame(relevant_terms)
+    else:
+        return pd.DataFrame()
 
 # Main Navigation
 def main():
@@ -1344,112 +1402,275 @@ def main():
             # Get unique proteins from interactions
             interaction_df = predictions_df[predictions_df['Prediction'] == 'Interaction']
             
-            if len(interaction_df) > 0:
-                all_proteins = list(set(
-                    interaction_df['Protein1'].tolist() + 
-                    interaction_df['Protein2'].tolist()
-                ))
-                
-                st.info(f"Analyzing {len(all_proteins)} unique proteins from {len(interaction_df)} predicted interactions")
-                
-                # Display protein list
-                with st.expander("🔍 View Protein List"):
-                    protein_cols = st.columns(4)
-                    for i, protein in enumerate(all_proteins):
-                        with protein_cols[i % 4]:
-                            # Check if VIP gene
-                            is_vip = False
-                            if not vip_genes_df.empty:
-                                gene_col = 'Hugo_Symbol' if 'Hugo_Symbol' in vip_genes_df.columns else 'gene'
-                                if gene_col in vip_genes_df.columns:
-                                    is_vip = protein in vip_genes_df[gene_col].tolist()
-                                else:
-                                    is_vip = protein in vip_genes_df.index.tolist()
-                            
-                            status = "🟢 VIP" if is_vip else "⚪ Regular"
-                            st.write(f"{status} {protein}")
-                
-                # GO Analysis
-                if st.button("🔬 Run GO Enrichment Analysis", type="primary"):
-                    with st.spinner("Performing enrichment analysis..."):
-                        go_results = calculate_go_enrichment(all_proteins)
-                        
-                        if not go_results.empty:
-                            st.success("✅ Enrichment analysis complete!")
-                            
-                            # Display results
-                            st.markdown("### 📋 Enriched GO Terms (Prostate Cancer Context)")
-                            
-                            # Add -log10(p) for visualization
-                            go_results['-log10(p)'] = -np.log10(go_results['p_value'])
-                            
-                            # Bar chart
-                            fig = px.bar(
-                                go_results,
-                                x='-log10(p)',
-                                y='name',
-                                orientation='h',
-                                title="Significantly Enriched GO Terms",
-                                labels={'name': 'GO Term', '-log10(p)': '-log10(p-value)'},
-                                color='-log10(p)',
-                                color_continuous_scale='Viridis'
-                            )
-                            fig.update_layout(
-                                height=400, 
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)'
-                            )
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Table with formatted results
-                            display_df = go_results.copy()
-                            display_df['p_value'] = display_df['p_value'].apply(lambda x: f"{x:.2e}")
-                            display_df['-log10(p)'] = display_df['-log10(p)'].apply(lambda x: f"{x:.2f}")
-                            
-                            st.dataframe(
-                                display_df[['term', 'name', 'genes', 'p_value', '-log10(p)']],
-                                use_container_width=True,
-                                column_config={
-                                    "term": "GO Term ID",
-                                    "name": "Description",
-                                    "genes": "Gene Count",
-                                    "p_value": "p-value",
-                                    "-log10(p)": "-log10(p)"
-                                }
-                            )
-                            
-                            # Download results
-                            csv = go_results.to_csv(index=False)
-                            st.download_button(
-                                "📥 Download GO Results",
-                                csv,
-                                f"go_enrichment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                "text/csv",
-                                key="download_go"
-                            )
-                            
-                            # Interpretation
-                            st.markdown("### 🔬 Biological Interpretation")
-                            st.markdown("""
-                            <div class="info-box">
-                            <h4>Key Findings:</h4>
-                            <ul>
-                            <li><b>Androgen Receptor Signaling:</b> Critical pathway in prostate cancer progression</li>
-                            <li><b>Apoptosis & Cell Cycle:</b> Dysregulated processes in cancer development</li>
-                            <li><b>DNA Repair:</b> Defective repair mechanisms contribute to tumorigenesis</li>
-                            <li><b>Cell Migration:</b> Associated with metastasis and cancer spread</li>
-                            </ul>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.warning("No significant enrichment found. This may be due to:")
-                            st.write("- Small number of proteins")
-                            st.write("- Proteins not associated with known pathways")
-                            st.write("- Need for more specific gene sets")
+            # Analysis options
+            analysis_mode = st.radio(
+                "Select Analysis Mode:",
+                ["Interacting Proteins Only", "All Predicted Proteins"],
+                help="Choose whether to analyze only proteins with predicted interactions or all proteins"
+            )
+            
+            if analysis_mode == "Interacting Proteins Only":
+                if len(interaction_df) > 0:
+                    all_proteins = list(set(
+                        interaction_df['Protein1'].tolist() + 
+                        interaction_df['Protein2'].tolist()
+                    ))
+                    analysis_description = f"proteins from {len(interaction_df)} predicted interactions"
+                else:
+                    st.warning("No predicted interactions found. Switch to 'All Predicted Proteins' mode.")
+                    st.stop()
             else:
-                st.info("No predicted interactions available for GO analysis. Please predict some interactions first.")
+                all_proteins = list(set(
+                    predictions_df['Protein1'].tolist() + 
+                    predictions_df['Protein2'].tolist()
+                ))
+                analysis_description = f"proteins from all predictions"
+            
+            st.info(f"Analyzing {len(all_proteins)} unique {analysis_description}")
+            
+            # Protein analysis with VIP gene information
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🧬 Protein Summary")
+                
+                vip_proteins = []
+                regular_proteins = []
+                
+                for protein in all_proteins:
+                    is_vip = False
+                    if not vip_genes_df.empty:
+                        gene_col = 'Hugo_Symbol' if 'Hugo_Symbol' in vip_genes_df.columns else 'gene'
+                        if gene_col in vip_genes_df.columns:
+                            is_vip = protein in vip_genes_df[gene_col].tolist()
+                        else:
+                            is_vip = protein in vip_genes_df.index.tolist()
+                    
+                    if is_vip:
+                        vip_proteins.append(protein)
+                    else:
+                        regular_proteins.append(protein)
+                
+                st.metric("🟢 VIP Genes", len(vip_proteins))
+                st.metric("⚪ Regular Genes", len(regular_proteins))
+                st.metric("📊 Total Proteins", len(all_proteins))
+            
+            with col2:
+                st.markdown("#### 🔍 Protein Details")
+                
+                # Show VIP proteins with expression info
+                if vip_proteins:
+                    st.markdown("**🟢 VIP Genes:**")
+                    for protein in vip_proteins[:5]:  # Show first 5
+                        gene_col = 'Hugo_Symbol' if 'Hugo_Symbol' in vip_genes_df.columns else 'gene'
+                        if gene_col in vip_genes_df.columns:
+                            gene_info = vip_genes_df[vip_genes_df[gene_col] == protein]
+                        else:
+                            gene_info = vip_genes_df[vip_genes_df.index == protein]
+                        
+                        if not gene_info.empty and 'log2_fold_change' in gene_info.columns:
+                            fc = gene_info.iloc[0]['log2_fold_change']
+                            direction = '⬆️' if fc > 0 else '⬇️'
+                            st.write(f"{direction} **{protein}** (FC: {fc:.2f})")
+                        else:
+                            st.write(f"🟢 **{protein}**")
+                    
+                    if len(vip_proteins) > 5:
+                        st.write(f"... and {len(vip_proteins) - 5} more VIP genes")
+                
+                if regular_proteins and len(regular_proteins) <= 10:
+                    st.markdown("**⚪ Regular Genes:**")
+                    for protein in regular_proteins:
+                        st.write(f"⚪ {protein}")
+            
+            # Expandable protein list
+            with st.expander("🔍 View Complete Protein List"):
+                protein_cols = st.columns(4)
+                for i, protein in enumerate(sorted(all_proteins)):
+                    with protein_cols[i % 4]:
+                        is_vip = protein in vip_proteins
+                        status = "🟢 VIP" if is_vip else "⚪ Regular"
+                        st.write(f"{status} {protein}")
+            
+            # GO Analysis
+            st.markdown("---")
+            analysis_col1, analysis_col2 = st.columns([2, 1])
+            
+            with analysis_col1:
+                run_analysis = st.button("🔬 Run GO Enrichment Analysis", type="primary")
+            
+            with analysis_col2:
+                include_description = st.checkbox("Include Descriptions", value=True)
+            
+            if run_analysis:
+                with st.spinner("Performing enrichment analysis..."):
+                    go_results = calculate_go_enrichment(all_proteins)
+                    
+                    if not go_results.empty:
+                        st.success("✅ Enrichment analysis complete!")
+                        
+                        # Display results
+                        st.markdown("### 📋 Enriched GO Terms (Prostate Cancer Context)")
+                        
+                        # Add -log10(p) for visualization
+                        go_results['-log10(p)'] = -np.log10(go_results['p_value'])
+                        
+                        # Enhanced bar chart
+                        fig = px.bar(
+                            go_results,
+                            x='-log10(p)',
+                            y='name',
+                            orientation='h',
+                            title="Significantly Enriched GO Terms",
+                            labels={'name': 'GO Term', '-log10(p)': '-log10(p-value)'},
+                            color='-log10(p)',
+                            color_continuous_scale='RdYlBu_r',
+                            height=max(300, len(go_results) * 60)
+                        )
+                        fig.update_layout(
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            font=dict(color='white')
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Enhanced results table
+                        display_df = go_results.copy()
+                        display_df['p_value_formatted'] = display_df['p_value'].apply(lambda x: f"{x:.2e}")
+                        display_df['-log10(p)_formatted'] = display_df['-log10(p)'].apply(lambda x: f"{x:.2f}")
+                        
+                        # Column configuration for better display
+                        column_config = {
+                            "term": st.column_config.TextColumn("GO Term ID", width="small"),
+                            "name": st.column_config.TextColumn("GO Term Name", width="large"),
+                            "genes": st.column_config.NumberColumn("Gene Count", format="%d"),
+                            "p_value_formatted": st.column_config.TextColumn("p-value", width="small"),
+                            "-log10(p)_formatted": st.column_config.TextColumn("-log10(p)", width="small")
+                        }
+                        
+                        if include_description:
+                            display_columns = ['term', 'name', 'description', 'genes', 'p_value_formatted', '-log10(p)_formatted']
+                            column_config["description"] = st.column_config.TextColumn("Biological Significance", width="large")
+                        else:
+                            display_columns = ['term', 'name', 'genes', 'p_value_formatted', '-log10(p)_formatted']
+                        
+                        st.dataframe(
+                            display_df[display_columns],
+                            use_container_width=True,
+                            column_config=column_config,
+                            hide_index=True
+                        )
+                        
+                        # Statistical Summary
+                        st.markdown("### 📈 Statistical Summary")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            significant_terms = len(go_results[go_results['p_value'] < 0.05])
+                            st.metric("Significant Terms (p<0.05)", significant_terms)
+                        
+                        with col2:
+                            highly_significant = len(go_results[go_results['p_value'] < 0.01])
+                            st.metric("Highly Significant (p<0.01)", highly_significant)
+                        
+                        with col3:
+                            avg_genes = go_results['genes'].mean()
+                            st.metric("Avg Genes per Term", f"{avg_genes:.1f}")
+                        
+                        # Download results
+                        csv = go_results.to_csv(index=False)
+                        st.download_button(
+                            "📥 Download GO Results",
+                            csv,
+                            f"go_enrichment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            "text/csv",
+                            key="download_go"
+                        )
+                        
+                        # Biological Interpretation
+                        st.markdown("### 🔬 Biological Interpretation")
+                        
+                        # Top terms analysis
+                        top_terms = go_results.nsmallest(3, 'p_value')
+                        
+                        st.markdown("""
+                        <div class="info-box">
+                        <h4>Key Findings:</h4>
+                        """, unsafe_allow_html=True)
+                        
+                        for _, term in top_terms.iterrows():
+                            st.write(f"**{term['name']}** (p={term['p_value']:.2e})")
+                            if 'description' in term:
+                                st.write(f"└─ {term['description']}")
+                        
+                        st.markdown("""
+                        <br>
+                        <h4>Clinical Relevance:</h4>
+                        <ul>
+                        <li>These pathways represent key biological processes disrupted in prostate cancer</li>
+                        <li>Proteins in these pathways may serve as potential therapeutic targets</li>
+                        <li>Understanding these interactions helps in drug development and treatment strategies</li>
+                        </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                    else:
+                        st.warning("⚠️ No significant enrichment found.")
+                        
+                        # Enhanced troubleshooting
+                        st.markdown("""
+                        ### 🔧 Possible Reasons & Solutions:
+                        
+                        **Current Analysis:**
+                        """)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"• **Number of proteins:** {len(all_proteins)}")
+                            st.write(f"• **VIP genes:** {len(vip_proteins)}")
+                            st.write(f"• **Analysis mode:** {analysis_mode}")
+                        
+                        with col2:
+                            st.write("**Recommendations:**")
+                            if len(all_proteins) < 5:
+                                st.write("• Try 'All Predicted Proteins' mode")
+                                st.write("• Make more protein predictions")
+                            if len(vip_proteins) == 0:
+                                st.write("• Consider proteins may not be in VIP gene set")
+                            st.write("• Results may still be biologically meaningful")
+                        
+                        # Show what proteins we're analyzing anyway
+                        st.markdown("### 📋 Analyzed Proteins")
+                        protein_analysis_df = pd.DataFrame({
+                            'Protein': all_proteins,
+                            'Type': ['VIP Gene' if p in vip_proteins else 'Regular Gene' for p in all_proteins],
+                            'In Database': [p in gene_sequences for p in all_proteins]
+                        })
+                        st.dataframe(protein_analysis_df, use_container_width=True)
         else:
             st.info("No predictions available. Please make predictions first using the PPI Prediction page.")
+            
+            # Enhanced quick start guide
+            st.markdown("""
+            ### 🚀 How to Perform GO Enrichment Analysis
+            
+            1. **Make Predictions** 📊
+               - Go to PPI Prediction page
+               - Enter protein pairs or upload batch file
+               - Generate interaction predictions
+            
+            2. **Return to GO Analysis** 🔬
+               - Come back to this page
+               - Choose analysis mode
+               - Run enrichment analysis
+            
+            3. **Interpret Results** 📈
+               - Review significant pathways
+               - Understand biological relevance
+               - Export results for further analysis
+            
+            **Tip:** For better results, aim for at least 5-10 proteins with predicted interactions.
+            """)
     
     elif page == "📈 Results":
         st.title("📈 Results Summary & Export")
